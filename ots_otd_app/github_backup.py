@@ -101,6 +101,7 @@ def github_settings() -> dict[str, Any]:
         "repository": _read_secret("GITHUB_REPOSITORY", "mathotto95-byte/OTSeOTD"),
         "branch": _read_secret("GITHUB_BRANCH", "main"),
         "latest_path": _read_secret("GITHUB_BACKUP_PATH", "backups/ots_otd_latest.json"),
+        "healthcheck_path": _read_secret("GITHUB_HEALTHCHECK_PATH", "backups/_healthcheck.json"),
         "auto_backup": _yes(_read_secret("GITHUB_AUTO_BACKUP", "SIM"), True),
     }
 
@@ -216,6 +217,8 @@ def _github_http_error_message(exc: HTTPError) -> str:
         )
     if exc.code == 404:
         return "GitHub nao encontrou o repositorio, branch ou arquivo de backup configurado."
+    if exc.code == 422:
+        return "GitHub nao conseguiu gravar o arquivo. Confira se a branch existe e se o repositorio permite escrita nessa branch."
     return str(exc)
 
 
@@ -226,6 +229,7 @@ def github_diagnostic() -> dict[str, Any]:
         "repository": settings["repository"],
         "branch": settings["branch"],
         "latest_path": settings["latest_path"],
+        "healthcheck_path": settings["healthcheck_path"],
         "destination": f"{settings['repository']}/{settings['latest_path']}",
         "destination_type": "Arquivo JSON no repositorio GitHub, nao GitHub Release",
         "token_masked": _mask_token(token),
@@ -249,13 +253,27 @@ def test_github_connection() -> dict[str, Any]:
     try:
         repo = _request_json("GET", _repo_api_url(settings["repository"]), settings["token"])
         _remote_sha(settings, settings["latest_path"])
+        healthcheck = {
+            "schema": "ots_otd_github_healthcheck_v1",
+            "generated_at": now_iso(),
+            "repository": settings["repository"],
+            "branch": settings["branch"],
+            "latest_path": settings["latest_path"],
+        }
+        _upload_bytes(
+            settings,
+            settings["healthcheck_path"],
+            json.dumps(healthcheck, ensure_ascii=False, indent=2).encode("utf-8"),
+            "Teste de escrita OTS/OTD backup GitHub",
+            retries=1,
+        )
     except HTTPError as exc:
         return {"status": "ERRO", "message": _github_http_error_message(exc), **diagnostic}
     except (URLError, TimeoutError) as exc:
         return {"status": "ERRO", "message": str(exc), **diagnostic}
     return {
         "status": "SUCESSO",
-        "message": "GitHub conectado. Token autenticou e o repositorio foi localizado.",
+        "message": "GitHub conectado. Token autenticou e a escrita no repositorio foi validada.",
         "repo_private": bool(repo.get("private")),
         **diagnostic,
     }

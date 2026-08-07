@@ -324,6 +324,8 @@ def _render_github_backup_panel() -> None:
     if st.sidebar.button("Testar conexao GitHub", use_container_width=True, key="github_connection_test"):
         result = test_github_connection()
         st.session_state["last_github_connection_test"] = result
+        if result.get("status") == "SUCESSO":
+            st.session_state.pop("last_github_backup_result", None)
 
     last_test = st.session_state.get("last_github_connection_test") or {}
     if last_test:
@@ -348,6 +350,7 @@ def _render_github_backup_panel() -> None:
             st.sidebar.warning(message)
 
     if st.sidebar.button("Enviar backup para GitHub", use_container_width=True, disabled=not github_backup_configured()):
+        st.session_state.pop("last_github_connection_test", None)
         result = backup_to_github("manual")
         st.session_state["last_github_backup_result"] = result
         if result.get("status") == "SUCESSO":
