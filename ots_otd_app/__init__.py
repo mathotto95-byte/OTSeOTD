@@ -1,0 +1,2 @@
+"""Aplicacao independente OTS/OTD."""
+
