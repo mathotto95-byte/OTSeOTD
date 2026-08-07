@@ -29,7 +29,9 @@ GITHUB_BRANCH = "main"
 GITHUB_AUTO_BACKUP = "SIM"
 ```
 
-Com `GITHUB_AUTO_BACKUP = "SIM"`, o app salva um backup no GitHub apos cada inclusao, alteracao e importacao.
+Com `GITHUB_AUTO_BACKUP = "SIM"`, o app dispara backup no GitHub apos cada inclusao e alteracao salva.
+
+Para nao deixar importacoes em massa lentas, importacao de planilha ou importacao do banco nao disparam backup automatico. Depois de importar, use o botao lateral `Enviar backup para GitHub`.
 
 O app salva:
 
@@ -83,7 +85,7 @@ O nome do usuario logado e gravado automaticamente em cada inclusao, alteracao e
 
 ## Uso simultaneo
 
-O app suporta uso leve por varias pessoas no Streamlit. Para 5 usuarios simultaneos, mantenha `GITHUB_AUTO_BACKUP = "SIM"`. Em caso de dois backups no mesmo instante, o app tenta reenviar o `latest.json` automaticamente para reduzir conflito.
+O app suporta uso leve por varias pessoas no Streamlit. Para 5 usuarios simultaneos, mantenha `GITHUB_AUTO_BACKUP = "SIM"`. O backup automatico roda em segundo plano apos incluir ou salvar alteracao, sem esperar o envio ao GitHub para liberar a tela. Em caso de dois backups no mesmo instante, o app tenta reenviar o `latest.json` automaticamente para reduzir conflito.
 
 GitHub e backup/auditoria, nao banco transacional. Para operacao pesada ou muitos registros sendo alterados ao mesmo tempo, prefira Supabase separado.
 

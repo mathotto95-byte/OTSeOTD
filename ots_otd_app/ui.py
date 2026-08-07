@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import pandas as pd
 import streamlit as st
 
@@ -146,8 +148,18 @@ def _restore_from_github_once() -> None:
 def _run_auto_github_backup(reason: str) -> None:
     if not github_auto_backup_enabled():
         return
-    result = backup_to_github(reason)
-    st.session_state["last_github_backup_result"] = result
+    st.session_state["last_github_backup_result"] = {
+        "status": "EM_SEGUNDO_PLANO",
+        "message": "Backup GitHub iniciado em segundo plano.",
+        "records": 0,
+    }
+    thread = threading.Thread(
+        target=backup_to_github,
+        args=(reason,),
+        daemon=True,
+        name=f"ots-otd-github-backup-{reason}",
+    )
+    thread.start()
 
 
 def _render_github_backup_panel() -> None:
@@ -169,6 +181,8 @@ def _render_github_backup_panel() -> None:
         message = last_backup.get("message") or status
         if status == "SUCESSO":
             st.sidebar.success(f"Backup GitHub OK: {last_backup.get('records', 0)} registro(s).")
+        elif status == "EM_SEGUNDO_PLANO":
+            st.sidebar.info("Backup GitHub iniciado em segundo plano.")
         elif status not in {"NAO_CONFIGURADO", ""}:
             st.sidebar.warning(message)
 
@@ -293,7 +307,7 @@ def _render_import(current_username: str) -> None:
                 st.warning("Importacao parcial. Revise as linhas com erro.")
             else:
                 st.success("Importacao concluida.")
-            _run_auto_github_backup("importacao")
+            st.caption("Para nao deixar a importacao lenta, o backup GitHub desta carga deve ser feito pelo botao lateral.")
             cols = st.columns(5)
             cols[0].metric("Lidas", summary.get("lidas", 0))
             cols[1].metric("Incluidas", summary.get("incluidas", 0))
@@ -373,7 +387,7 @@ def _render_database_backup_tab(current_username: str) -> None:
                     f"Importacao parcial. Restaurados: {result.get('restored', 0)} | "
                     f"Ignorados: {result.get('ignored', 0)}"
                 )
-            _run_auto_github_backup("importacao_banco")
+            st.caption("Para nao deixar a importacao lenta, o backup GitHub desta carga deve ser feito pelo botao lateral.")
             st.rerun()
         except Exception as exc:
             st.error(f"Nao foi possivel importar o banco: {exc}")
