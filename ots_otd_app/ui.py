@@ -5,6 +5,13 @@ import streamlit as st
 
 from ots_otd_app.database import database_status, initialize_database
 from ots_otd_app.exporter import dataframe_to_excel, local_backup_zip
+from ots_otd_app.github_backup import (
+    backup_to_github,
+    github_auto_backup_enabled,
+    github_backup_configured,
+    github_settings,
+    restore_from_github_if_empty,
+)
 from ots_otd_app.importer import import_excel
 from ots_otd_app.repository import (
     buscar_registro_mais_recente,
@@ -99,6 +106,53 @@ def _username() -> str:
     return st.session_state["username"]
 
 
+def _restore_from_github_once() -> None:
+    if st.session_state.get("github_restore_checked"):
+        return
+    st.session_state["github_restore_checked"] = True
+    result = restore_from_github_if_empty()
+    if result.get("status") == "RESTAURADO":
+        st.session_state["last_github_restore_result"] = result
+
+
+def _run_auto_github_backup(reason: str) -> None:
+    if not github_auto_backup_enabled():
+        return
+    result = backup_to_github(reason)
+    st.session_state["last_github_backup_result"] = result
+
+
+def _render_github_backup_panel() -> None:
+    settings = github_settings()
+    st.sidebar.subheader("Backup GitHub")
+    if github_backup_configured():
+        st.sidebar.caption(f"Repo: {settings['repository']} | Branch: {settings['branch']}")
+    else:
+        st.sidebar.warning("GitHub backup nao configurado.")
+        st.sidebar.caption("Configure GITHUB_TOKEN nos Secrets para salvar backup no GitHub.")
+
+    last_restore = st.session_state.get("last_github_restore_result") or {}
+    if last_restore:
+        st.sidebar.success(f"Restaurado do GitHub: {last_restore.get('records', 0)} registro(s).")
+
+    last_backup = st.session_state.get("last_github_backup_result") or {}
+    if last_backup:
+        status = str(last_backup.get("status") or "")
+        message = last_backup.get("message") or status
+        if status == "SUCESSO":
+            st.sidebar.success(f"Backup GitHub OK: {last_backup.get('records', 0)} registro(s).")
+        elif status not in {"NAO_CONFIGURADO", ""}:
+            st.sidebar.warning(message)
+
+    if st.sidebar.button("Enviar backup para GitHub", use_container_width=True, disabled=not github_backup_configured()):
+        result = backup_to_github("manual")
+        st.session_state["last_github_backup_result"] = result
+        if result.get("status") == "SUCESSO":
+            st.sidebar.success("Backup enviado para GitHub.")
+        else:
+            st.sidebar.warning(result.get("message") or "Backup GitHub nao concluido.")
+
+
 def _render_status() -> None:
     status = database_status()
     cols = st.columns(4)
@@ -132,6 +186,7 @@ def _render_include_box(current_username: str) -> None:
         if st.button("Incluir registro", type="primary", use_container_width=True, disabled=bool(missing), key="ots_inc_btn"):
             try:
                 new_id = incluir_registro_original(payload, current_username)
+                _run_auto_github_backup("inclusao")
                 st.success(f"Registro incluido com sucesso. ID {new_id}.")
                 st.session_state["ots_include_form_version"] = form_version + 1
                 st.rerun()
@@ -186,6 +241,7 @@ def _render_update_box(current_username: str) -> None:
         if st.button("Salvar Alteracao", type="primary", use_container_width=True, disabled=bool(missing) or not bool(changes), key=f"ots_update_save_{found.get('id')}"):
             try:
                 new_id = incluir_registro_alterado(found, payload, current_username)
+                _run_auto_github_backup("alteracao")
                 st.success(f"Alteracao salva com sucesso. Nova linha ID {new_id}.")
                 st.session_state.pop("ots_update_found", None)
                 st.rerun()
@@ -209,6 +265,7 @@ def _render_import(current_username: str) -> None:
                 st.warning("Importacao parcial. Revise as linhas com erro.")
             else:
                 st.success("Importacao concluida.")
+            _run_auto_github_backup("importacao")
             cols = st.columns(5)
             cols[0].metric("Lidas", summary.get("lidas", 0))
             cols[1].metric("Incluidas", summary.get("incluidas", 0))
@@ -284,7 +341,9 @@ def _render_history() -> None:
 def render_app() -> None:
     st.set_page_config(page_title="OTS e OTD", page_icon="OTS", layout="wide")
     initialize_database()
+    _restore_from_github_once()
     username = _username()
+    _render_github_backup_panel()
     st.title("OTS E OTD")
     st.caption("Sistema independente com historico cronologico e banco proprio.")
     _render_status()
@@ -316,4 +375,3 @@ def render_app() -> None:
             stamp = now().strftime("%Y%m%d_%H%M%S")
             st.download_button("Backup ZIP local", local_backup_zip(all_rows), f"backup_ots_otd_{stamp}.zip", "application/zip", use_container_width=True)
     _render_history()
-

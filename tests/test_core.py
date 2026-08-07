@@ -4,7 +4,7 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 
-from ots_otd_app import database, repository
+from ots_otd_app import database, github_backup, repository
 from ots_otd_app.service import montar_payload, normalizar_codigo_monitoramento, validar_campos_obrigatorios
 
 
@@ -40,7 +40,28 @@ class OtsOtdIndependentTest(unittest.TestCase):
         self.assertEqual(int(history.iloc[0]["id"]), updated_id)
         self.assertEqual(repository.contar_registros_atuais_ots_otd({"codigo_monitoramento": "TR1"}), 1)
 
+    def test_github_backup_sem_token_nao_envia(self):
+        original_read_secret = github_backup._read_secret
+        try:
+            github_backup._read_secret = lambda name, default="": default if name in {"GITHUB_REPOSITORY", "GITHUB_BRANCH", "GITHUB_BACKUP_PATH"} else ""
+            result = github_backup.backup_to_github("teste")
+        finally:
+            github_backup._read_secret = original_read_secret
+
+        self.assertEqual(result["status"], "NAO_CONFIGURADO")
+
+    def test_restore_github_ignora_base_com_dados(self):
+        original_read_secret = github_backup._read_secret
+        try:
+            payload = montar_payload("01/08/2026", "02/08/2026", "Carga 08h", "", "TR2")
+            repository.incluir_registro_original(payload, "ana")
+            github_backup._read_secret = lambda name, default="": "token" if name == "GITHUB_TOKEN" else default
+            result = github_backup.restore_from_github_if_empty()
+        finally:
+            github_backup._read_secret = original_read_secret
+
+        self.assertEqual(result["status"], "IGNORADO_BASE_COM_DADOS")
+
 
 if __name__ == "__main__":
     unittest.main()
-
