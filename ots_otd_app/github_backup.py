@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+import time
+import uuid
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -112,16 +114,27 @@ def _download_text(settings: dict[str, Any], path: str) -> str:
     return content
 
 
-def _upload_bytes(settings: dict[str, Any], path: str, content: bytes, message: str) -> dict[str, Any]:
-    payload = {
-        "message": message,
-        "content": base64.b64encode(content).decode("ascii"),
-        "branch": settings["branch"],
-    }
-    sha = _remote_sha(settings, path)
-    if sha:
-        payload["sha"] = sha
-    return _request_json("PUT", _api_url(settings["repository"], path), settings["token"], payload)
+def _upload_bytes(settings: dict[str, Any], path: str, content: bytes, message: str, retries: int = 3) -> dict[str, Any]:
+    last_error: HTTPError | None = None
+    for attempt in range(max(int(retries or 1), 1)):
+        payload = {
+            "message": message,
+            "content": base64.b64encode(content).decode("ascii"),
+            "branch": settings["branch"],
+        }
+        sha = _remote_sha(settings, path)
+        if sha:
+            payload["sha"] = sha
+        try:
+            return _request_json("PUT", _api_url(settings["repository"], path), settings["token"], payload)
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code != 409 or attempt >= retries - 1:
+                raise
+            time.sleep(0.8 + attempt * 0.8)
+    if last_error:
+        raise last_error
+    return {}
 
 
 def _all_records() -> pd.DataFrame:
@@ -157,11 +170,11 @@ def backup_to_github(reason: str = "manual") -> dict[str, Any]:
         return {"status": "IGNORADO_BASE_VAZIA", "message": "Backup GitHub ignorado: base local vazia.", "records": 0}
     payload = _backup_payload(df)
     content = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
-    stamp = now().strftime("%Y%m%d_%H%M%S")
-    history_path = f"backups/history/{stamp}_ots_otd.json"
+    stamp = now().strftime("%Y%m%d_%H%M%S_%f")
+    history_path = f"backups/history/{stamp}_{uuid.uuid4().hex[:8]}_ots_otd.json"
     try:
         _upload_bytes(settings, settings["latest_path"], content, f"Backup OTS/OTD latest ({reason})")
-        _upload_bytes(settings, history_path, content, f"Backup OTS/OTD historico ({reason})")
+        _upload_bytes(settings, history_path, content, f"Backup OTS/OTD historico ({reason})", retries=1)
     except (HTTPError, URLError, TimeoutError) as exc:
         return {"status": "ERRO", "message": str(exc), "records": int(len(df))}
     return {"status": "SUCESSO", "message": f"Backup enviado para {settings['latest_path']}.", "records": int(len(df))}

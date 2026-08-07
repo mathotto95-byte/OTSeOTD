@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from ots_otd_app.auth import authenticate, using_default_admin
 from ots_otd_app.database import database_status, initialize_database
 from ots_otd_app.exporter import dataframe_to_excel, local_backup_zip
 from ots_otd_app.github_backup import (
@@ -99,11 +100,32 @@ def _style_status(row):
     return ["" for _ in row]
 
 
-def _username() -> str:
-    st.sidebar.subheader("Usuario")
-    username = st.sidebar.text_input("Nome para registrar alteracoes", value=st.session_state.get("username", "admin"))
-    st.session_state["username"] = str(username or "admin").strip() or "admin"
-    return st.session_state["username"]
+def _require_login() -> str:
+    if st.session_state.get("authenticated") and st.session_state.get("username"):
+        username = str(st.session_state["username"])
+        st.sidebar.subheader("Usuario")
+        st.sidebar.success(username)
+        if st.sidebar.button("Sair", use_container_width=True):
+            st.session_state.pop("authenticated", None)
+            st.session_state.pop("username", None)
+            st.rerun()
+        return username
+
+    st.title("OTS E OTD")
+    st.caption("Acesso restrito")
+    if using_default_admin():
+        st.warning("Usuario inicial ativo: admin / admin. Configure usuarios nos Secrets antes de liberar para a equipe.")
+    with st.form("login_form"):
+        username = st.text_input("Usuario")
+        password = st.text_input("Senha", type="password")
+        submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
+    if submitted:
+        if authenticate(username, password):
+            st.session_state["authenticated"] = True
+            st.session_state["username"] = str(username).strip()
+            st.rerun()
+        st.error("Usuario ou senha invalidos.")
+    st.stop()
 
 
 def _restore_from_github_once() -> None:
@@ -340,9 +362,9 @@ def _render_history() -> None:
 
 def render_app() -> None:
     st.set_page_config(page_title="OTS e OTD", page_icon="OTS", layout="wide")
+    username = _require_login()
     initialize_database()
     _restore_from_github_once()
-    username = _username()
     _render_github_backup_panel()
     st.title("OTS E OTD")
     st.caption("Sistema independente com historico cronologico e banco proprio.")

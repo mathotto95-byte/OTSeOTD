@@ -4,7 +4,7 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 
-from ots_otd_app import database, github_backup, repository
+from ots_otd_app import auth, database, github_backup, repository
 from ots_otd_app.service import montar_payload, normalizar_codigo_monitoramento, validar_campos_obrigatorios
 
 
@@ -61,6 +61,25 @@ class OtsOtdIndependentTest(unittest.TestCase):
             github_backup._read_secret = original_read_secret
 
         self.assertEqual(result["status"], "IGNORADO_BASE_COM_DADOS")
+
+    def test_login_admin_padrao_quando_sem_secrets(self):
+        original_read_users = auth._read_users_from_secrets
+        try:
+            auth._read_users_from_secrets = lambda: {}
+            self.assertTrue(auth.authenticate("admin", "admin"))
+            self.assertFalse(auth.authenticate("admin", "errada"))
+        finally:
+            auth._read_users_from_secrets = original_read_users
+
+    def test_login_usuarios_configurados(self):
+        original_read_users = auth._read_users_from_secrets
+        try:
+            auth._read_users_from_secrets = lambda: {"ana": "123", "bia": "sha256:a36cac71d1a44a1593a22d98403455bd2d6f737e465c4cf3fcead29381a08335"}
+            self.assertTrue(auth.authenticate("ana", "123"))
+            self.assertTrue(auth.authenticate("bia", "segredo"))
+            self.assertFalse(auth.authenticate("admin", "admin"))
+        finally:
+            auth._read_users_from_secrets = original_read_users
 
 
 if __name__ == "__main__":

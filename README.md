@@ -29,12 +29,44 @@ GITHUB_BRANCH = "main"
 GITHUB_AUTO_BACKUP = "SIM"
 ```
 
+Com `GITHUB_AUTO_BACKUP = "SIM"`, o app salva um backup no GitHub apos cada inclusao, alteracao e importacao.
+
 O app salva:
 
 - `backups/ots_otd_latest.json`: ultimo backup completo.
 - `backups/history/AAAAMMDD_HHMMSS_ots_otd.json`: historico datado.
 
 Se o app abrir com SQLite vazio e existir `backups/ots_otd_latest.json`, ele restaura automaticamente esse backup. O backup vazio nunca substitui o ultimo backup bom.
+
+## Login
+
+Configure os usuarios nos Secrets do Streamlit:
+
+```toml
+[users]
+matheus = "senha1"
+usuario2 = "senha2"
+usuario3 = "senha3"
+usuario4 = "senha4"
+usuario5 = "senha5"
+```
+
+Enquanto `[users]` nao estiver configurado, o sistema libera apenas o usuario inicial `admin` com senha `admin` e mostra aviso na tela de login.
+
+Tambem e aceito senha em SHA-256:
+
+```toml
+[users]
+matheus = "sha256:HASH_DA_SENHA"
+```
+
+O nome do usuario logado e gravado automaticamente em cada inclusao, alteracao e importacao.
+
+## Uso simultaneo
+
+O app suporta uso leve por varias pessoas no Streamlit. Para 5 usuarios simultaneos, mantenha `GITHUB_AUTO_BACKUP = "SIM"`. Em caso de dois backups no mesmo instante, o app tenta reenviar o `latest.json` automaticamente para reduzir conflito.
+
+GitHub e backup/auditoria, nao banco transacional. Para operacao pesada ou muitos registros sendo alterados ao mesmo tempo, prefira Supabase separado.
 
 ## Deploy no Streamlit
 
