@@ -39,6 +39,129 @@ from ots_otd_app.service import comparar_alteracoes, montar_payload, normalizar_
 from ots_otd_app.time_utils import now
 
 
+def _apply_theme() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --rw-bg: #030914;
+            --rw-panel: #071526;
+            --rw-panel-soft: #0f2438;
+            --rw-navy: #020d3f;
+            --rw-gold: #d4af37;
+            --rw-gold-strong: #d6a933;
+            --rw-border: rgba(212, 175, 55, 0.32);
+            --rw-text: #f8fafc;
+            --rw-muted: rgba(248, 250, 252, 0.72);
+        }
+
+        .stApp {
+            background: var(--rw-bg) !important;
+            color: var(--rw-text) !important;
+        }
+        .block-container {
+            padding-top: 1.1rem;
+            max-width: 1550px;
+        }
+        h1, h2, h3, label, p, span, div {
+            color: var(--rw-text);
+        }
+        [data-testid="stCaptionContainer"] p {
+            color: var(--rw-muted) !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background: var(--rw-navy) !important;
+            border-right: 1px solid var(--rw-border);
+        }
+        [data-testid="stSidebar"] * {
+            color: var(--rw-text) !important;
+        }
+
+        div[data-testid="stMetric"] {
+            background: var(--rw-navy);
+            border: 1px solid var(--rw-border);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        div[data-testid="stMetric"] * {
+            color: var(--rw-text) !important;
+        }
+
+        div[data-testid="stExpander"] {
+            background: rgba(7, 21, 38, 0.72);
+            border: 1px solid var(--rw-border);
+            border-radius: 8px;
+        }
+        div[data-testid="stExpander"] summary {
+            color: var(--rw-text) !important;
+            font-weight: 800;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(7, 21, 38, 0.72);
+            border-color: var(--rw-border) !important;
+            border-radius: 8px;
+        }
+
+        div[data-testid="stDataFrame"] {
+            border: 1px solid var(--rw-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .stButton > button, .stDownloadButton > button {
+            background: var(--rw-panel);
+            border: 1px solid var(--rw-gold);
+            border-radius: 8px;
+            color: var(--rw-text) !important;
+            font-weight: 800;
+        }
+        .stButton > button:hover, .stDownloadButton > button:hover {
+            background: var(--rw-gold);
+            border-color: var(--rw-gold);
+            color: var(--rw-bg) !important;
+        }
+        .stButton > button[kind="primary"] {
+            background: var(--rw-gold);
+            color: var(--rw-bg) !important;
+            border-color: var(--rw-gold);
+        }
+        .stButton > button[kind="primary"]:hover {
+            background: var(--rw-gold-strong);
+            color: var(--rw-bg) !important;
+        }
+
+        [data-baseweb="input"] input, [data-baseweb="select"] div {
+            color: var(--rw-text) !important;
+        }
+        [data-baseweb="input"], [data-baseweb="select"] > div {
+            background: var(--rw-panel) !important;
+            border-color: var(--rw-border) !important;
+        }
+
+        .rw-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 4px;
+        }
+        .rw-title-row h1 {
+            margin: 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _refresh_button(key: str, *, sidebar: bool = False) -> None:
+    target = st.sidebar if sidebar else st
+    if target.button("Atualizar pagina", use_container_width=True, key=key):
+        st.rerun()
+
+
 def _format_date(value: object) -> str:
     if value in [None, ""]:
         return ""
@@ -180,6 +303,8 @@ def _run_auto_github_backup(reason: str) -> None:
 
 def _render_github_backup_panel() -> None:
     settings = github_settings()
+    _refresh_button("sidebar_refresh_page", sidebar=True)
+    st.sidebar.divider()
     st.sidebar.subheader("Backup GitHub")
     if github_backup_configured():
         st.sidebar.caption(f"Repo: {settings['repository']} | Branch: {settings['branch']}")
@@ -424,19 +549,19 @@ def _render_missing_agenda_panel(pendentes: pd.DataFrame, total_registros: int, 
 
 
 def _filters() -> tuple[dict, int | None]:
-    st.subheader("Filtros")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        filtro_codigo = normalizar_codigo_monitoramento(st.text_input("Codigo de Monitoramento", key="ots_filter_codigo"))
-        status = st.selectbox("Status", ["Todos", "ORIGINAL", "ALTERADO"], key="ots_filter_status")
-    with c2:
-        data_inicial = st.text_input("Data inicial", key="ots_filter_data_ini", placeholder="DD/MM/AAAA")
-        data_final = st.text_input("Data final", key="ots_filter_data_fim", placeholder="DD/MM/AAAA")
-    with c3:
-        users = ["Todos", *usuarios_com_registros()]
-        usuario = st.selectbox("Usuario responsavel", users, key="ots_filter_usuario")
-        busca = st.text_input("Busca geral", key="ots_filter_busca")
-        quantidade = st.selectbox("Quantidade exibida", ["500", "1000", "2000", "Todos"], key="ots_filter_limit")
+    with st.expander("Filtros", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            filtro_codigo = normalizar_codigo_monitoramento(st.text_input("Codigo de Monitoramento", key="ots_filter_codigo"))
+            status = st.selectbox("Status", ["Todos", "ORIGINAL", "ALTERADO"], key="ots_filter_status")
+        with c2:
+            data_inicial = st.text_input("Data inicial", key="ots_filter_data_ini", placeholder="DD/MM/AAAA")
+            data_final = st.text_input("Data final", key="ots_filter_data_fim", placeholder="DD/MM/AAAA")
+        with c3:
+            users = ["Todos", *usuarios_com_registros()]
+            usuario = st.selectbox("Usuario responsavel", users, key="ots_filter_usuario")
+            busca = st.text_input("Busca geral", key="ots_filter_busca")
+            quantidade = st.selectbox("Quantidade exibida", ["500", "1000", "2000", "Todos"], key="ots_filter_limit")
     return (
         {
             "codigo_monitoramento": filtro_codigo,
@@ -485,11 +610,17 @@ def _render_history() -> None:
 
 def render_app() -> None:
     st.set_page_config(page_title="OTS e OTD", page_icon="OTS", layout="wide")
+    _apply_theme()
     username = _require_login()
     initialize_database()
     _restore_from_github_once()
     _render_github_backup_panel()
-    st.title("OTS E OTD")
+    title_col, refresh_col = st.columns([5, 1])
+    with title_col:
+        st.title("OTS E OTD")
+    with refresh_col:
+        st.write("")
+        _refresh_button("top_refresh_page")
     st.caption("Sistema independente com historico cronologico e banco proprio.")
     _render_status()
     st.divider()
