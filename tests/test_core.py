@@ -54,6 +54,9 @@ class OtsOtdIndependentTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "NAO_CONFIGURADO")
 
+    def test_github_token_aceita_prefixo_bearer(self):
+        self.assertEqual(github_backup._sanitize_token("Bearer github_pat_123"), "github_pat_123")
+
     def test_restore_github_ignora_base_com_dados(self):
         original_read_secret = github_backup._read_secret
         try:

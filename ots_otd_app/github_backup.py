@@ -33,19 +33,45 @@ BACKUP_COLUMNS = [
 ]
 
 
+SECRET_ALIASES = {
+    "GITHUB_TOKEN": ["GITHUB_TOKEN", "github_token", "token"],
+    "GITHUB_REPOSITORY": ["GITHUB_REPOSITORY", "github_repository", "repository", "repo"],
+    "GITHUB_BRANCH": ["GITHUB_BRANCH", "github_branch", "branch"],
+    "GITHUB_BACKUP_PATH": ["GITHUB_BACKUP_PATH", "github_backup_path", "backup_path", "latest_path"],
+    "GITHUB_AUTO_BACKUP": ["GITHUB_AUTO_BACKUP", "github_auto_backup", "auto_backup"],
+}
+
+
 def _read_secret(name: str, default: str = "") -> str:
+    candidates = SECRET_ALIASES.get(name, [name])
     try:
         import streamlit as st
 
-        value = st.secrets.get(name)
-        if value not in [None, ""]:
-            return str(value)
+        for candidate in candidates:
+            value = st.secrets.get(candidate)
+            if value not in [None, ""]:
+                return str(value).strip()
         github = st.secrets.get("github", {})
-        if github and github.get(name):
-            return str(github.get(name))
+        if github:
+            for candidate in candidates:
+                value = github.get(candidate)
+                if value not in [None, ""]:
+                    return str(value).strip()
     except Exception:
         pass
-    return os.getenv(name, default)
+    for candidate in candidates:
+        value = os.getenv(candidate)
+        if value not in [None, ""]:
+            return str(value).strip()
+    return default
+
+
+def _sanitize_token(value: str) -> str:
+    token = str(value or "").strip().strip('"').strip("'")
+    for prefix in ["Bearer ", "bearer ", "token ", "Token "]:
+        if token.startswith(prefix):
+            token = token[len(prefix) :].strip()
+    return token
 
 
 def _yes(value: object, default: bool = False) -> bool:
@@ -57,7 +83,7 @@ def _yes(value: object, default: bool = False) -> bool:
 
 def github_settings() -> dict[str, Any]:
     return {
-        "token": _read_secret("GITHUB_TOKEN"),
+        "token": _sanitize_token(_read_secret("GITHUB_TOKEN")),
         "repository": _read_secret("GITHUB_REPOSITORY", "mathotto95-byte/OTSeOTD"),
         "branch": _read_secret("GITHUB_BRANCH", "main"),
         "latest_path": _read_secret("GITHUB_BACKUP_PATH", "backups/ots_otd_latest.json"),
@@ -137,6 +163,22 @@ def _upload_bytes(settings: dict[str, Any], path: str, content: bytes, message: 
     return {}
 
 
+def _github_http_error_message(exc: HTTPError) -> str:
+    if exc.code == 401:
+        return (
+            "GitHub recusou o token: token invalido, expirado ou sem acesso. "
+            "No Streamlit Secrets use GITHUB_TOKEN = \"github_pat_...\" ou [github] token = \"github_pat_...\"."
+        )
+    if exc.code == 403:
+        return (
+            "GitHub recusou por permissao. O token precisa ter acesso ao repositorio e permissao "
+            "Contents: Read and write."
+        )
+    if exc.code == 404:
+        return "GitHub nao encontrou o repositorio, branch ou arquivo de backup configurado."
+    return str(exc)
+
+
 def _all_records() -> pd.DataFrame:
     return read_sql(
         """
@@ -175,7 +217,9 @@ def backup_to_github(reason: str = "manual") -> dict[str, Any]:
     try:
         _upload_bytes(settings, settings["latest_path"], content, f"Backup OTS/OTD latest ({reason})")
         _upload_bytes(settings, history_path, content, f"Backup OTS/OTD historico ({reason})", retries=1)
-    except (HTTPError, URLError, TimeoutError) as exc:
+    except HTTPError as exc:
+        return {"status": "ERRO", "message": _github_http_error_message(exc), "records": int(len(df))}
+    except (URLError, TimeoutError) as exc:
         return {"status": "ERRO", "message": str(exc), "records": int(len(df))}
     return {"status": "SUCESSO", "message": f"Backup enviado para {settings['latest_path']}.", "records": int(len(df))}
 
@@ -207,7 +251,7 @@ def restore_from_github_if_empty() -> dict[str, Any]:
     except HTTPError as exc:
         if exc.code == 404:
             return {"status": "NAO_ENCONTRADO", "message": "Nenhum backup latest encontrado no GitHub.", "records": 0}
-        return {"status": "ERRO", "message": str(exc), "records": 0}
+        return {"status": "ERRO", "message": _github_http_error_message(exc), "records": 0}
     except Exception as exc:
         return {"status": "ERRO", "message": str(exc), "records": 0}
     return {"status": "RESTAURADO", "message": "Backup GitHub restaurado no SQLite local.", "records": int(len(rows))}

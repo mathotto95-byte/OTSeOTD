@@ -29,6 +29,18 @@ GITHUB_BRANCH = "main"
 GITHUB_AUTO_BACKUP = "SIM"
 ```
 
+Tambem pode usar o formato agrupado:
+
+```toml
+[github]
+token = "github_pat_..."
+repository = "mathotto95-byte/OTSeOTD"
+branch = "main"
+auto_backup = "SIM"
+```
+
+O token precisa ter acesso ao repositorio e permissao `Contents: Read and write`.
+
 Com `GITHUB_AUTO_BACKUP = "SIM"`, o app dispara backup no GitHub apos cada inclusao e alteracao salva.
 
 Para nao deixar importacoes em massa lentas, importacao de planilha ou importacao do banco nao disparam backup automatico. Depois de importar, use o botao lateral `Enviar backup para GitHub`.
