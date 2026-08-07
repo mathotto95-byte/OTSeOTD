@@ -61,6 +61,26 @@ def normalizar_data(valor: object) -> str:
     return parsed.date().isoformat()
 
 
+def normalizar_data_hora(valor: object) -> str:
+    if valor in [None, ""]:
+        return ""
+    if isinstance(valor, pd.Timestamp):
+        if pd.isna(valor):
+            return ""
+        return valor.replace(microsecond=0).isoformat()
+    if isinstance(valor, datetime):
+        return valor.replace(microsecond=0).isoformat()
+    text = normalizar_texto(valor)
+    iso_match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:[+-]\d{2}:?\d{2})?", text)
+    if iso_match:
+        year, month, day, hour, minute, second = iso_match.groups()
+        return f"{year}-{month}-{day}T{hour}:{minute}:{second or '00'}"
+    parsed = pd.to_datetime(valor, dayfirst=True, errors="coerce")
+    if pd.isna(parsed):
+        return text
+    return parsed.replace(microsecond=0).isoformat()
+
+
 def montar_payload(
     previsao_carga: object,
     data_limite: object,
@@ -98,4 +118,3 @@ def comparar_alteracoes(registro_anterior: dict[str, Any], novos_dados: dict[str
 
 def dados_alterados_json(changes: dict[str, dict[str, str]]) -> str:
     return json.dumps(changes, ensure_ascii=False, default=str)
-

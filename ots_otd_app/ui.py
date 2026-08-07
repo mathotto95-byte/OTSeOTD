@@ -42,7 +42,7 @@ from ots_otd_app.time_utils import now
 def _format_date(value: object) -> str:
     if value in [None, ""]:
         return ""
-    parsed = pd.to_datetime(value, errors="coerce")
+    parsed = pd.to_datetime(value, dayfirst=True, errors="coerce")
     if pd.isna(parsed):
         return str(value)
     return parsed.strftime("%d/%m/%Y")
@@ -51,7 +51,7 @@ def _format_date(value: object) -> str:
 def _format_datetime(value: object) -> str:
     if value in [None, ""]:
         return ""
-    parsed = pd.to_datetime(value, errors="coerce")
+    parsed = pd.to_datetime(value, dayfirst=True, errors="coerce")
     if pd.isna(parsed):
         return str(value)
     return parsed.strftime("%d/%m/%Y %H:%M")
@@ -98,6 +98,22 @@ def _display_records(df: pd.DataFrame) -> pd.DataFrame:
             "Dados Alterados": df.get("dados_alterados", ""),
         }
     )
+
+
+def _display_backup_records(df: pd.DataFrame) -> pd.DataFrame:
+    view = _display_records(df)
+    if not df.empty:
+        view["Criado em"] = df.get("created_at", "").apply(_format_datetime)
+        view["Atualizado em"] = df.get("updated_at", "").apply(_format_datetime)
+    return view
+
+
+def _format_change_value(field: str, value: object) -> str:
+    if field in {"previsao_carga", "data_limite"}:
+        return _format_date(value)
+    if field in {"data_hora_registro", "created_at", "updated_at"}:
+        return _format_datetime(value)
+    return "" if value is None else str(value)
 
 
 def _style_status(row):
@@ -342,7 +358,7 @@ def _render_database_backup_tab(current_username: str) -> None:
     with col2:
         st.download_button(
             "Baixar banco Excel",
-            dataframe_to_excel({"ots_otd_banco": df}),
+            dataframe_to_excel({"ots_otd_banco": _display_backup_records(df)}),
             f"ots_otd_banco_{stamp}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
@@ -449,7 +465,20 @@ def _render_history() -> None:
             st.markdown(f"**{row.get('tipo_registro')}** | ID {row.get('id')} | {_format_datetime(row.get('data_hora_registro'))} | {row.get('usuario_registro')}")
             changes = parse_dados_alterados(row.get("dados_alterados"))
             if changes:
-                st.dataframe(pd.DataFrame([{"Campo": field, "Anterior": values.get("anterior", ""), "Novo": values.get("novo", "")} for field, values in changes.items()]), use_container_width=True, hide_index=True)
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Campo": field,
+                                "Anterior": _format_change_value(field, values.get("anterior", "")),
+                                "Novo": _format_change_value(field, values.get("novo", "")),
+                            }
+                            for field, values in changes.items()
+                        ]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
             else:
                 st.caption("Registro original sem alteracoes anteriores.")
 

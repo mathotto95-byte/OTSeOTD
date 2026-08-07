@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from ots_otd_app import auth, backup_restore, database, github_backup, repository
-from ots_otd_app.service import montar_payload, normalizar_codigo_monitoramento, validar_campos_obrigatorios
+from ots_otd_app.service import montar_payload, normalizar_codigo_monitoramento, normalizar_data, normalizar_data_hora, validar_campos_obrigatorios
 
 
 class OtsOtdIndependentTest(unittest.TestCase):
@@ -25,6 +25,10 @@ class OtsOtdIndependentTest(unittest.TestCase):
         self.assertEqual(normalizar_codigo_monitoramento(" ab 123 "), "AB 123")
         payload = montar_payload("", "", "Carga 08h", "", "AB")
         self.assertEqual(validar_campos_obrigatorios(payload), ["Previsao Carga", "Data Limite"])
+
+    def test_datas_brasil_sao_normalizadas_para_banco(self):
+        self.assertEqual(normalizar_data("07/08/2026"), "2026-08-07")
+        self.assertEqual(normalizar_data_hora("07/08/2026 14:35"), "2026-08-07T14:35:00")
 
     def test_inclusao_e_alteracao_mantem_historico(self):
         original = montar_payload("01/08/2026", "02/08/2026", "Carga 08h", "", "TR1")

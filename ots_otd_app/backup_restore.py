@@ -7,6 +7,7 @@ import pandas as pd
 
 from ots_otd_app.database import get_connection, read_sql
 from ots_otd_app.github_backup import BACKUP_COLUMNS
+from ots_otd_app.service import normalizar_data, normalizar_data_hora
 from ots_otd_app.time_utils import now_iso
 
 
@@ -22,6 +23,8 @@ DISPLAY_TO_INTERNAL = {
     "Usuario": "usuario_registro",
     "ID do Registro Anterior": "registro_origem_id",
     "Dados Alterados": "dados_alterados",
+    "Criado em": "created_at",
+    "Atualizado em": "updated_at",
 }
 
 
@@ -65,6 +68,11 @@ def _clean_value(value: Any) -> Any:
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized = {column: _clean_value(row.get(column)) for column in BACKUP_COLUMNS}
+    normalized["previsao_carga"] = normalizar_data(normalized.get("previsao_carga"))
+    normalized["data_limite"] = normalizar_data(normalized.get("data_limite"))
+    normalized["data_hora_registro"] = normalizar_data_hora(normalized.get("data_hora_registro"))
+    normalized["created_at"] = normalizar_data_hora(normalized.get("created_at"))
+    normalized["updated_at"] = normalizar_data_hora(normalized.get("updated_at"))
     if normalized.get("dados_alterados") in [None, ""]:
         normalized["dados_alterados"] = "{}"
     for column in ["agenda_gfl", "created_at", "updated_at"]:
@@ -153,4 +161,3 @@ def restore_backup_rows(rows: list[dict[str, Any]], mode: str = "merge") -> dict
                 ignored += 1
     status = "SUCESSO" if errors == 0 else "PARCIAL"
     return {"status": status, "restored": restored, "ignored": ignored, "errors": errors}
-
