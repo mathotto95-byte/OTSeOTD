@@ -16,10 +16,12 @@ from ots_otd_app.database import database_status, initialize_database
 from ots_otd_app.exporter import dataframe_to_excel, local_backup_zip
 from ots_otd_app.github_backup import (
     backup_to_github,
+    github_diagnostic,
     github_auto_backup_enabled,
     github_backup_configured,
     github_settings,
     restore_from_github_if_empty,
+    test_github_connection,
 )
 from ots_otd_app.importer import import_excel
 from ots_otd_app.repository import (
@@ -303,14 +305,32 @@ def _run_auto_github_backup(reason: str) -> None:
 
 def _render_github_backup_panel() -> None:
     settings = github_settings()
+    diagnostic = github_diagnostic()
     _refresh_button("sidebar_refresh_page", sidebar=True)
     st.sidebar.divider()
     st.sidebar.subheader("Backup GitHub")
+    st.sidebar.caption("Destino: arquivo JSON no GitHub, nao Release.")
     if github_backup_configured():
         st.sidebar.caption(f"Repo: {settings['repository']} | Branch: {settings['branch']}")
+        st.sidebar.caption(f"Arquivo: {settings['latest_path']}")
     else:
         st.sidebar.warning("GitHub backup nao configurado.")
-        st.sidebar.caption("Configure GITHUB_TOKEN nos Secrets para salvar backup no GitHub.")
+        if diagnostic.get("token_placeholder"):
+            st.sidebar.caption("O token parece incompleto. Cole o GITHUB_TOKEN completo, sem reticencias.")
+        else:
+            st.sidebar.caption("Configure GITHUB_TOKEN nos Secrets para salvar backup no GitHub.")
+    st.sidebar.caption(f"Token: {diagnostic.get('token_masked')} | {diagnostic.get('token_length', 0)} caracteres")
+
+    if st.sidebar.button("Testar conexao GitHub", use_container_width=True, key="github_connection_test"):
+        result = test_github_connection()
+        st.session_state["last_github_connection_test"] = result
+
+    last_test = st.session_state.get("last_github_connection_test") or {}
+    if last_test:
+        if last_test.get("status") == "SUCESSO":
+            st.sidebar.success(last_test.get("message"))
+        else:
+            st.sidebar.warning(last_test.get("message") or last_test.get("status"))
 
     last_restore = st.session_state.get("last_github_restore_result") or {}
     if last_restore:

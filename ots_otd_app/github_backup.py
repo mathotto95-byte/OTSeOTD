@@ -74,6 +74,20 @@ def _sanitize_token(value: str) -> str:
     return token
 
 
+def _token_is_placeholder(token: str) -> bool:
+    cleaned = str(token or "").strip()
+    return bool(cleaned) and ("..." in cleaned or cleaned in {"github_pat_", "ghp_", "gho_"})
+
+
+def _mask_token(token: str) -> str:
+    cleaned = str(token or "").strip()
+    if not cleaned:
+        return "nao configurado"
+    if len(cleaned) <= 12:
+        return "***"
+    return f"{cleaned[:10]}...{cleaned[-4:]}"
+
+
 def _yes(value: object, default: bool = False) -> bool:
     text = str(value or "").strip().upper()
     if not text:
@@ -93,7 +107,7 @@ def github_settings() -> dict[str, Any]:
 
 def github_backup_configured() -> bool:
     settings = github_settings()
-    return bool(settings["token"] and settings["repository"] and settings["branch"])
+    return bool(settings["token"] and not _token_is_placeholder(settings["token"]) and settings["repository"] and settings["branch"])
 
 
 def github_auto_backup_enabled() -> bool:
@@ -106,17 +120,43 @@ def _api_url(repository: str, path: str) -> str:
     return f"https://api.github.com/repos/{repository}/contents/{safe_path}"
 
 
-def _request_json(method: str, url: str, token: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def _repo_api_url(repository: str) -> str:
+    return f"https://api.github.com/repos/{quote(repository, safe='/')}"
+
+
+def _build_request(method: str, url: str, token: str, payload: dict[str, Any] | None, auth_scheme: str) -> Request:
     data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(url, data=data, method=method)
     request.add_header("Accept", "application/vnd.github+json")
-    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("Authorization", f"{auth_scheme} {token}")
     request.add_header("X-GitHub-Api-Version", "2022-11-28")
     if data is not None:
         request.add_header("Content-Type", "application/json")
+    return request
+
+
+def _request_json(method: str, url: str, token: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    last_unauthorized: HTTPError | None = None
+    for auth_scheme in ["Bearer", "token"]:
+        request = _build_request(method, url, token, payload, auth_scheme)
+        try:
+            with urlopen(request, timeout=30) as response:
+                raw = response.read()
+            return json.loads(raw.decode("utf-8")) if raw else {}
+        except HTTPError as exc:
+            if exc.code == 401 and auth_scheme == "Bearer":
+                last_unauthorized = exc
+                continue
+            raise
+    if last_unauthorized:
+        raise last_unauthorized
+    return {}
+
+
+def _request_bytes(method: str, url: str, token: str, payload: dict[str, Any] | None = None) -> bytes:
+    request = _build_request(method, url, token, payload, "Bearer")
     with urlopen(request, timeout=30) as response:
-        raw = response.read()
-    return json.loads(raw.decode("utf-8")) if raw else {}
+        return response.read()
 
 
 def _remote_sha(settings: dict[str, Any], path: str) -> str:
@@ -179,6 +219,48 @@ def _github_http_error_message(exc: HTTPError) -> str:
     return str(exc)
 
 
+def github_diagnostic() -> dict[str, Any]:
+    settings = github_settings()
+    token = settings["token"]
+    return {
+        "repository": settings["repository"],
+        "branch": settings["branch"],
+        "latest_path": settings["latest_path"],
+        "destination": f"{settings['repository']}/{settings['latest_path']}",
+        "destination_type": "Arquivo JSON no repositorio GitHub, nao GitHub Release",
+        "token_masked": _mask_token(token),
+        "token_length": len(token),
+        "token_placeholder": _token_is_placeholder(token),
+        "configured": github_backup_configured(),
+    }
+
+
+def test_github_connection() -> dict[str, Any]:
+    settings = github_settings()
+    diagnostic = github_diagnostic()
+    if not settings["token"]:
+        return {"status": "NAO_CONFIGURADO", "message": "GITHUB_TOKEN nao configurado nos Secrets.", **diagnostic}
+    if _token_is_placeholder(settings["token"]):
+        return {
+            "status": "TOKEN_INVALIDO",
+            "message": "O GITHUB_TOKEN parece estar como exemplo/placeholder. Cole o token completo gerado no GitHub, sem reticencias.",
+            **diagnostic,
+        }
+    try:
+        repo = _request_json("GET", _repo_api_url(settings["repository"]), settings["token"])
+        _remote_sha(settings, settings["latest_path"])
+    except HTTPError as exc:
+        return {"status": "ERRO", "message": _github_http_error_message(exc), **diagnostic}
+    except (URLError, TimeoutError) as exc:
+        return {"status": "ERRO", "message": str(exc), **diagnostic}
+    return {
+        "status": "SUCESSO",
+        "message": "GitHub conectado. Token autenticou e o repositorio foi localizado.",
+        "repo_private": bool(repo.get("private")),
+        **diagnostic,
+    }
+
+
 def _all_records() -> pd.DataFrame:
     return read_sql(
         """
@@ -203,6 +285,12 @@ def _backup_payload(df: pd.DataFrame) -> dict[str, Any]:
 
 def backup_to_github(reason: str = "manual") -> dict[str, Any]:
     settings = github_settings()
+    if _token_is_placeholder(settings["token"]):
+        return {
+            "status": "TOKEN_INVALIDO",
+            "message": "GITHUB_TOKEN invalido: o valor parece estar incompleto ou com reticencias. Use o token completo gerado no GitHub.",
+            "records": 0,
+        }
     if not github_backup_configured():
         return {"status": "NAO_CONFIGURADO", "message": "Configure GITHUB_TOKEN para habilitar backup no GitHub.", "records": 0}
     if get_database_config().db_type == "postgres":

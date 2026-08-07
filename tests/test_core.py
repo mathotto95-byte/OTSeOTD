@@ -57,6 +57,22 @@ class OtsOtdIndependentTest(unittest.TestCase):
     def test_github_token_aceita_prefixo_bearer(self):
         self.assertEqual(github_backup._sanitize_token("Bearer github_pat_123"), "github_pat_123")
 
+    def test_github_token_placeholder_nao_configura_backup(self):
+        original_read_secret = github_backup._read_secret
+        try:
+            values = {
+                "GITHUB_TOKEN": "github_pat_...",
+                "GITHUB_REPOSITORY": "mathotto95-byte/OTSeOTD",
+                "GITHUB_BRANCH": "main",
+            }
+            github_backup._read_secret = lambda name, default="": values.get(name, default)
+            self.assertFalse(github_backup.github_backup_configured())
+            result = github_backup.backup_to_github("teste")
+        finally:
+            github_backup._read_secret = original_read_secret
+
+        self.assertEqual(result["status"], "TOKEN_INVALIDO")
+
     def test_restore_github_ignora_base_com_dados(self):
         original_read_secret = github_backup._read_secret
         try:

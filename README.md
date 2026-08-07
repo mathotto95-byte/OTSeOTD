@@ -20,6 +20,11 @@ Esse Supabase será exclusivo do OTS/OTD. Não use as credenciais do Controle In
 
 ## Backup pelo GitHub
 
+O backup nao e salvo em GitHub Release. Ele e salvo como arquivos JSON dentro do proprio repositorio:
+
+- `backups/ots_otd_latest.json`
+- `backups/history/..._ots_otd.json`
+
 Para usar o GitHub como backup de dados, crie um token no GitHub com acesso de escrita ao repositório `OTSeOTD` e configure nos Secrets do Streamlit:
 
 ```toml
@@ -39,7 +44,7 @@ branch = "main"
 auto_backup = "SIM"
 ```
 
-O token precisa ter acesso ao repositorio e permissao `Contents: Read and write`.
+O token precisa estar completo, sem `...`, e precisa ter acesso ao repositorio com permissao `Contents: Read and write`.
 
 Com `GITHUB_AUTO_BACKUP = "SIM"`, o app dispara backup no GitHub apos cada inclusao e alteracao salva.
 
