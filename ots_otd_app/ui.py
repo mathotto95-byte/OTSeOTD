@@ -4,6 +4,12 @@ import pandas as pd
 import streamlit as st
 
 from ots_otd_app.auth import authenticate, using_default_admin
+from ots_otd_app.backup_restore import (
+    all_database_records,
+    backup_json_bytes,
+    parse_backup_file,
+    restore_backup_rows,
+)
 from ots_otd_app.database import database_status, initialize_database
 from ots_otd_app.exporter import dataframe_to_excel, local_backup_zip
 from ots_otd_app.github_backup import (
@@ -299,6 +305,80 @@ def _render_import(current_username: str) -> None:
                 st.dataframe(details, use_container_width=True, hide_index=True)
 
 
+def _render_database_backup_tab(current_username: str) -> None:
+    st.subheader("Backup e recuperacao do banco")
+    st.caption("Use esta aba para baixar uma copia completa e restaurar o banco caso o app abra sem dados.")
+
+    df = all_database_records()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Registros no banco", int(len(df)))
+    c2.metric("Formato seguro", "JSON")
+    c3.metric("Usuario", current_username)
+
+    stamp = now().strftime("%Y%m%d_%H%M%S")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.download_button(
+            "Baixar banco JSON",
+            backup_json_bytes(),
+            f"ots_otd_banco_{stamp}.json",
+            "application/json",
+            use_container_width=True,
+        )
+    with col2:
+        st.download_button(
+            "Baixar banco Excel",
+            dataframe_to_excel({"ots_otd_banco": df}),
+            f"ots_otd_banco_{stamp}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with col3:
+        all_rows = lambda: _display_records(listar_registros_ots_otd({}, limit=None))
+        st.download_button(
+            "Baixar banco ZIP",
+            local_backup_zip(all_rows),
+            f"backup_ots_otd_{stamp}.zip",
+            "application/zip",
+            use_container_width=True,
+        )
+
+    st.divider()
+    st.subheader("Importar banco")
+    uploaded = st.file_uploader("Arquivo de backup do banco", type=["json", "xlsx", "xls"], key="database_backup_upload")
+    mode_label = st.radio(
+        "Modo de importacao",
+        ["Mesclar com banco atual", "Substituir banco atual"],
+        horizontal=True,
+        key="database_backup_restore_mode",
+    )
+    mode = "replace" if mode_label.startswith("Substituir") else "merge"
+    confirm = ""
+    if mode == "replace":
+        st.warning("Substituir apaga o banco atual antes de importar. Backup vazio nao substitui dados existentes.")
+        confirm = st.text_input("Digite RESTAURAR para liberar a substituicao", key="database_backup_replace_confirm")
+    disabled = uploaded is None or (mode == "replace" and confirm.strip().upper() != "RESTAURAR")
+    if st.button("Importar banco", type="primary", use_container_width=True, disabled=disabled):
+        try:
+            content = uploaded.getvalue()
+            rows = parse_backup_file(uploaded.name, content, uploaded)
+            result = restore_backup_rows(rows, mode)
+            if result.get("status") == "BLOQUEADO_BACKUP_VAZIO":
+                st.error("Backup vazio. Banco atual preservado.")
+                return
+            if result.get("status") == "SUCESSO":
+                st.success(f"Banco importado com sucesso. {result.get('restored', 0)} registro(s) restaurado(s).")
+            else:
+                st.warning(
+                    f"Importacao parcial. Restaurados: {result.get('restored', 0)} | "
+                    f"Ignorados: {result.get('ignored', 0)}"
+                )
+            _run_auto_github_backup("importacao_banco")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Nao foi possivel importar o banco: {exc}")
+
+
 def _render_missing_agenda_panel(pendentes: pd.DataFrame, total_registros: int, total_pendentes: int) -> None:
     with st.container(border=True):
         st.subheader("Pendentes de Agenda GFL")
@@ -370,30 +450,29 @@ def render_app() -> None:
     st.caption("Sistema independente com historico cronologico e banco proprio.")
     _render_status()
     st.divider()
-    _render_include_box(username)
-    _render_update_box(username)
-    _render_import(username)
-    filtros, limite = _filters()
-    total_registros = contar_registros_ots_otd(filtros)
-    total_registros_atuais = contar_registros_atuais_ots_otd(filtros)
-    total_pendentes_agenda = contar_pendentes_agenda_gfl(filtros)
-    registros = listar_registros_ots_otd(filtros, limit=limite)
-    pendentes_agenda = listar_pendentes_agenda_gfl(filtros, limit=limite)
-    view = _display_records(registros)
-    _render_missing_agenda_panel(pendentes_agenda, total_registros_atuais, total_pendentes_agenda)
-    st.subheader("Banco OTS E OTD")
-    c_total, c_exibidos = st.columns(2)
-    c_total.metric("Registros nos filtros", int(total_registros))
-    c_exibidos.metric("Registros exibidos", int(len(view)))
-    if view.empty:
-        st.info("Nenhum registro encontrado para os filtros aplicados.")
-    else:
-        st.dataframe(view.style.apply(_style_status, axis=1), use_container_width=True, hide_index=True)
-        c1, c2 = st.columns(2)
-        with c1:
+    tab_operacao, tab_backup, tab_historico = st.tabs(["Operacao", "Importacao do Banco", "Historico"])
+    with tab_operacao:
+        _render_include_box(username)
+        _render_update_box(username)
+        _render_import(username)
+        filtros, limite = _filters()
+        total_registros = contar_registros_ots_otd(filtros)
+        total_registros_atuais = contar_registros_atuais_ots_otd(filtros)
+        total_pendentes_agenda = contar_pendentes_agenda_gfl(filtros)
+        registros = listar_registros_ots_otd(filtros, limit=limite)
+        pendentes_agenda = listar_pendentes_agenda_gfl(filtros, limit=limite)
+        view = _display_records(registros)
+        _render_missing_agenda_panel(pendentes_agenda, total_registros_atuais, total_pendentes_agenda)
+        st.subheader("Banco OTS E OTD")
+        c_total, c_exibidos = st.columns(2)
+        c_total.metric("Registros nos filtros", int(total_registros))
+        c_exibidos.metric("Registros exibidos", int(len(view)))
+        if view.empty:
+            st.info("Nenhum registro encontrado para os filtros aplicados.")
+        else:
+            st.dataframe(view.style.apply(_style_status, axis=1), use_container_width=True, hide_index=True)
             st.download_button("Exportar OTS e OTD", dataframe_to_excel({"ots_otd": view}), "ots_otd.xlsx", use_container_width=True)
-        with c2:
-            all_rows = lambda: _display_records(listar_registros_ots_otd({}, limit=None))
-            stamp = now().strftime("%Y%m%d_%H%M%S")
-            st.download_button("Backup ZIP local", local_backup_zip(all_rows), f"backup_ots_otd_{stamp}.zip", "application/zip", use_container_width=True)
-    _render_history()
+    with tab_backup:
+        _render_database_backup_tab(username)
+    with tab_historico:
+        _render_history()

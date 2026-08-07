@@ -38,6 +38,24 @@ O app salva:
 
 Se o app abrir com SQLite vazio e existir `backups/ots_otd_latest.json`, ele restaura automaticamente esse backup. O backup vazio nunca substitui o ultimo backup bom.
 
+## Importacao do banco
+
+A aba `Importacao do Banco` permite:
+
+- Baixar o banco completo em JSON.
+- Baixar o banco completo em Excel.
+- Baixar ZIP com Excel e SQLite local.
+- Importar um backup `.json` ou `.xlsx`.
+
+Para recuperacao de problema, prefira o JSON baixado pela propria aba ou o arquivo `backups/ots_otd_latest.json` salvo no GitHub.
+
+Modos disponiveis:
+
+- `Mesclar com banco atual`: adiciona registros que ainda nao existem pelo ID.
+- `Substituir banco atual`: apaga o banco atual e restaura o backup. Exige digitar `RESTAURAR`.
+
+Backup vazio nunca substitui a base atual.
+
 ## Login
 
 Configure os usuarios nos Secrets do Streamlit:

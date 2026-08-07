@@ -4,7 +4,7 @@ import unittest
 from contextlib import contextmanager
 from pathlib import Path
 
-from ots_otd_app import auth, database, github_backup, repository
+from ots_otd_app import auth, backup_restore, database, github_backup, repository
 from ots_otd_app.service import montar_payload, normalizar_codigo_monitoramento, validar_campos_obrigatorios
 
 
@@ -80,6 +80,26 @@ class OtsOtdIndependentTest(unittest.TestCase):
             self.assertTrue(auth.authenticate("admin", "admin"))
         finally:
             auth._read_users_from_secrets = original_read_users
+
+    def test_backup_json_restaura_banco(self):
+        payload = montar_payload("01/08/2026", "02/08/2026", "Carga 08h", "GFL", "TR3")
+        repository.incluir_registro_original(payload, "ana")
+        rows = backup_restore.parse_backup_file("backup.json", backup_restore.backup_json_bytes())
+
+        result = backup_restore.restore_backup_rows(rows, "replace")
+        history = repository.listar_historico_monitoramento("TR3")
+
+        self.assertEqual(result["status"], "SUCESSO")
+        self.assertEqual(len(history), 1)
+
+    def test_backup_vazio_nao_substitui_banco(self):
+        payload = montar_payload("01/08/2026", "02/08/2026", "Carga 08h", "GFL", "TR4")
+        repository.incluir_registro_original(payload, "ana")
+
+        result = backup_restore.restore_backup_rows([], "replace")
+
+        self.assertEqual(result["status"], "BLOQUEADO_BACKUP_VAZIO")
+        self.assertEqual(len(repository.listar_historico_monitoramento("TR4")), 1)
 
 
 if __name__ == "__main__":
