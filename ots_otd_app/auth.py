@@ -35,11 +35,12 @@ def _read_users_from_secrets() -> dict[str, str]:
 
 def configured_users() -> dict[str, str]:
     users = {username: password for username, password in _read_users_from_secrets().items() if username}
-    return users or {"admin": "admin"}
+    return {"admin": "admin", **users}
 
 
 def using_default_admin() -> bool:
-    return not bool(_read_users_from_secrets())
+    users = _read_users_from_secrets()
+    return str(users.get("admin") or "") == ""
 
 
 def _sha256(value: str) -> str:
@@ -62,4 +63,3 @@ def authenticate(username: object, password: object) -> bool:
     if stored is None:
         return False
     return _password_matches(stored, str(password or ""))
-

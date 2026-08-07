@@ -44,6 +44,7 @@ Configure os usuarios nos Secrets do Streamlit:
 
 ```toml
 [users]
+admin = "admin"
 matheus = "senha1"
 usuario2 = "senha2"
 usuario3 = "senha3"
