@@ -1,7 +1,7 @@
 {
   "schema": "ots_otd_backup_v1",
-  "generated_at": "2026-09-13T15:00:36-03:00",
-  "records": 1192,
+  "generated_at": "2026-09-13T15:06:16-03:00",
+  "records": 1193,
   "rows": [
     {
       "id": 1,
@@ -17882,6 +17882,21 @@
       "dados_alterados": "{\"previsao_carga\": {\"anterior\": \"2026-09-12\", \"novo\": \"2026-12-09\"}, \"agenda_gfl\": {\"anterior\": \"\", \"novo\": \"16/09/2026 06:00\"}}",
       "created_at": "2026-09-13T15:00:35-03:00",
       "updated_at": "2026-09-13T15:00:35-03:00"
+    },
+    {
+      "id": 1193,
+      "previsao_carga": "2026-12-09",
+      "data_limite": "2026-09-14",
+      "agendamento_carga": "14/09/2026",
+      "agenda_gfl": "15/09/2026 12:00",
+      "codigo_monitoramento": "9513605",
+      "tipo_registro": "ALTERADO",
+      "data_hora_registro": "2026-09-13T15:06:15-03:00",
+      "usuario_registro": "luana",
+      "registro_origem_id": 1178.0,
+      "dados_alterados": "{\"previsao_carga\": {\"anterior\": \"2026-09-12\", \"novo\": \"2026-12-09\"}, \"agenda_gfl\": {\"anterior\": \"\", \"novo\": \"15/09/2026 12:00\"}}",
+      "created_at": "2026-09-13T15:06:15-03:00",
+      "updated_at": "2026-09-13T15:06:15-03:00"
     }
   ]
 }
