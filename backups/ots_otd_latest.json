@@ -1,7 +1,7 @@
 {
   "schema": "ots_otd_backup_v1",
-  "generated_at": "2026-09-17T06:33:55-03:00",
-  "records": 1300,
+  "generated_at": "2026-09-17T06:36:29-03:00",
+  "records": 1301,
   "rows": [
     {
       "id": 1,
@@ -19502,6 +19502,21 @@
       "dados_alterados": "{\"agenda_gfl\": {\"anterior\": \"\", \"novo\": \"17/09/2026 20:00\"}}",
       "created_at": "2026-09-17T06:33:55-03:00",
       "updated_at": "2026-09-17T06:33:55-03:00"
+    },
+    {
+      "id": 1301,
+      "previsao_carga": "2026-09-15",
+      "data_limite": "2026-09-16",
+      "agendamento_carga": "15/09/2026 16:00",
+      "agenda_gfl": "17/09/2026 20:00",
+      "codigo_monitoramento": "9524098",
+      "tipo_registro": "ORIGINAL",
+      "data_hora_registro": "2026-09-17T06:36:28-03:00",
+      "usuario_registro": "carol",
+      "registro_origem_id": null,
+      "dados_alterados": "{}",
+      "created_at": "2026-09-17T06:36:28-03:00",
+      "updated_at": "2026-09-17T06:36:28-03:00"
     }
   ]
 }
