@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
 from ots_otd_app.auth import authenticate, using_default_admin
+from ots_otd_app.rw_theme import apply_theme as apply_rw_theme, render_brand_header, render_login_header, render_sidebar_logo
 from ots_otd_app.backup_restore import (
     all_database_records,
     backup_json_bytes,
@@ -39,6 +41,9 @@ from ots_otd_app.repository import (
 )
 from ots_otd_app.service import comparar_alteracoes, montar_payload, normalizar_codigo_monitoramento, validar_campos_obrigatorios
 from ots_otd_app.time_utils import now
+
+
+LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "rodo_wall_logo.png"
 
 
 def _apply_theme() -> None:
@@ -252,6 +257,7 @@ def _style_status(row):
 def _require_login() -> str:
     if st.session_state.get("authenticated") and st.session_state.get("username"):
         username = str(st.session_state["username"])
+        render_sidebar_logo()
         st.sidebar.subheader("Usuario")
         st.sidebar.success(username)
         if st.sidebar.button("Sair", use_container_width=True):
@@ -260,20 +266,22 @@ def _require_login() -> str:
             st.rerun()
         return username
 
-    st.title("OTS E OTD")
-    st.caption("Acesso restrito")
-    if using_default_admin():
-        st.warning("Usuario inicial ativo: admin / admin. Configure usuarios nos Secrets antes de liberar para a equipe.")
-    with st.form("login_form"):
-        username = st.text_input("Usuario")
-        password = st.text_input("Senha", type="password")
-        submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
-    if submitted:
-        if authenticate(username, password):
-            st.session_state["authenticated"] = True
-            st.session_state["username"] = str(username).strip()
-            st.rerun()
-        st.error("Usuario ou senha invalidos.")
+    _, center, _ = st.columns([1, 1.3, 1])
+    with center:
+        with st.container(border=True):
+            render_login_header("OTS E OTD", "Acesso restrito")
+            if using_default_admin():
+                st.warning("Usuario inicial ativo: admin / admin. Configure usuarios nos Secrets antes de liberar para a equipe.")
+            with st.form("login_form"):
+                username = st.text_input("Usuario")
+                password = st.text_input("Senha", type="password")
+                submitted = st.form_submit_button("Entrar", type="primary", use_container_width=True)
+            if submitted:
+                if authenticate(username, password):
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = str(username).strip()
+                    st.rerun()
+                st.error("Usuario ou senha invalidos.")
     st.stop()
 
 
@@ -634,17 +642,17 @@ def _render_history() -> None:
 def render_app() -> None:
     st.set_page_config(page_title="OTS e OTD", page_icon="OTS", layout="wide")
     _apply_theme()
+    apply_rw_theme(LOGO_PATH)
     username = _require_login()
     initialize_database()
     _restore_from_github_once()
     _render_github_backup_panel()
-    title_col, refresh_col = st.columns([5, 1])
+    title_col, refresh_col = st.columns([4, 1])
     with title_col:
-        st.title("OTS E OTD")
+        render_brand_header("OTS E OTD", "Sistema independente com historico cronologico e banco proprio.")
     with refresh_col:
         st.write("")
         _refresh_button("top_refresh_page")
-    st.caption("Sistema independente com historico cronologico e banco proprio.")
     _render_status()
     st.divider()
     tab_operacao, tab_backup, tab_historico = st.tabs(["Operacao", "Importacao do Banco", "Historico"])
