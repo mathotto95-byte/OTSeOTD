@@ -23,7 +23,7 @@ Esse Supabase será exclusivo do OTS/OTD. Não use as credenciais do Controle In
 O backup nao e salvo em GitHub Release. Ele e salvo como arquivos JSON dentro do proprio repositorio:
 
 - `backups/ots_otd_latest.json`
-- `backups/history/..._ots_otd.json`
+- `backups/ots_otd_latest_previous.json`
 
 Para usar o GitHub como backup de dados, crie um token no GitHub com acesso de escrita ao repositório `OTSeOTD` e configure nos Secrets do Streamlit:
 
@@ -48,12 +48,26 @@ O token precisa estar completo, sem `...`, e precisa ter acesso ao repositorio c
 
 Com `GITHUB_AUTO_BACKUP = "SIM"`, o app dispara backup no GitHub apos cada inclusao e alteracao salva.
 
+Tambem executa diariamente as **01:00 (America/Sao_Paulo)**, em segundo plano,
+sem precisar manter uma pagina aberta. O processo Streamlit precisa estar ativo.
+Se a hospedagem suspender ou reiniciar o app, o backup pendente roda quando o app
+voltar depois das 01:00. Falhas sao registradas no log e repetidas em cinco minutos.
+A data do ultimo backup diario fica no JSON, evitando repetir apos reiniciar.
+Execucao garantida durante suspensao exige um servico sempre ligado com acesso ao banco;
+um workflow GitHub nao consegue ler o SQLite privado do Streamlit.
+
 Para nao deixar importacoes em massa lentas, importacao de planilha ou importacao do banco nao disparam backup automatico. Depois de importar, use o botao lateral `Enviar backup para GitHub`.
 
 O app salva:
 
 - `backups/ots_otd_latest.json`: ultimo backup completo.
-- `backups/history/AAAAMMDD_HHMMSS_ots_otd.json`: historico datado.
+- `backups/ots_otd_latest_previous.json`: backup imediatamente anterior.
+
+A cada envio, a copia anterior e substituida pelo antigo backup atual e o novo
+backup vira o atual. Os dois arquivos sao atualizados em um unico commit atomico;
+falha ou conflito nao remove as copias existentes. Arquivos antigos de
+`backups/history/*_ots_otd.json` sao retirados da versao atual do repositorio na
+mesma operacao. O historico de commits Git continua preservado.
 
 Se o app abrir com SQLite vazio e existir `backups/ots_otd_latest.json`, ele restaura automaticamente esse backup. O backup vazio nunca substitui o ultimo backup bom.
 
@@ -102,7 +116,7 @@ O nome do usuario logado e gravado automaticamente em cada inclusao, alteracao e
 
 ## Uso simultaneo
 
-O app suporta uso leve por varias pessoas no Streamlit. Para 5 usuarios simultaneos, mantenha `GITHUB_AUTO_BACKUP = "SIM"`. O backup automatico roda em segundo plano apos incluir ou salvar alteracao, sem esperar o envio ao GitHub para liberar a tela. Em caso de dois backups no mesmo instante, o app tenta reenviar o `latest.json` automaticamente para reduzir conflito.
+O app suporta uso leve por varias pessoas no Streamlit. Para 5 usuarios simultaneos, mantenha `GITHUB_AUTO_BACKUP = "SIM"`. O backup automatico roda em segundo plano apos incluir ou salvar alteracao, sem esperar o envio ao GitHub para liberar a tela. Os envios sao serializados no processo; conflitos com commits externos sao repetidos sem force push.
 
 GitHub e backup/auditoria, nao banco transacional. Para operacao pesada ou muitos registros sendo alterados ao mesmo tempo, prefira Supabase separado.
 

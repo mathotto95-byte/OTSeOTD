@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from ots_otd_app.auth import authenticate, using_default_admin
+from ots_otd_app.automatic_backup import start_daily_backup
 from ots_otd_app.backup_restore import (
     all_database_records,
     backup_json_bytes,
@@ -309,6 +310,7 @@ def _render_github_backup_panel() -> None:
     _refresh_button("sidebar_refresh_page", sidebar=True)
     st.sidebar.divider()
     st.sidebar.subheader("Backup GitHub")
+    st.sidebar.caption("Dois backups: atual e anterior. Diario as 01:00 (Brasilia), enquanto o app estiver ativo; atrasos sao executados ao retornar.")
     st.sidebar.caption("Destino: arquivo JSON no GitHub, nao Release.")
     if github_backup_configured():
         st.sidebar.caption(f"Repo: {settings['repository']} | Branch: {settings['branch']}")
@@ -634,9 +636,10 @@ def _render_history() -> None:
 def render_app() -> None:
     st.set_page_config(page_title="OTS e OTD", page_icon="OTS", layout="wide")
     _apply_theme()
-    username = _require_login()
     initialize_database()
     _restore_from_github_once()
+    start_daily_backup()
+    username = _require_login()
     _render_github_backup_panel()
     title_col, refresh_col = st.columns([5, 1])
     with title_col:

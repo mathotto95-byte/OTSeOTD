@@ -4,7 +4,7 @@ import base64
 import json
 import os
 import time
-import uuid
+import threading
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -14,6 +14,9 @@ import pandas as pd
 
 from ots_otd_app.database import get_connection, get_database_config, read_sql
 from ots_otd_app.time_utils import now, now_iso
+
+
+_BACKUP_LOCK = threading.Lock()
 
 
 BACKUP_COLUMNS = [
@@ -301,7 +304,52 @@ def _backup_payload(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _rotate_backup(settings: dict[str, Any], payload: dict[str, Any], reason: str) -> None:
+    api = _repo_api_url(settings["repository"]) + "/git"
+    token = settings["token"]
+    branch = quote(settings["branch"], safe="/")
+    latest = settings["latest_path"]
+    previous = latest.removesuffix(".json") + "_previous.json"
+    for attempt in range(3):
+        head = _request_json("GET", f"{api}/ref/heads/{branch}", token)["object"]["sha"]
+        commit = _request_json("GET", f"{api}/commits/{head}", token)
+        tree = _request_json("GET", f"{api}/trees/{commit['tree']['sha']}?recursive=1", token)
+        if tree.get("truncated"):
+            raise ValueError("Arvore GitHub incompleta; backups preservados.")
+        entries = {item["path"]: item for item in tree["tree"]}
+        changes = []
+        if latest in entries:
+            old = json.loads(_download_text({**settings, "branch": head}, latest))
+            if old.get("schema") != "ots_otd_backup_v1" or not old.get("rows"):
+                raise ValueError("Backup atual invalido; rotacao cancelada.")
+            payload["daily_backup_date"] = old.get("daily_backup_date", "")
+            changes.append({"path": previous, "mode": "100644", "type": "blob", "sha": entries[latest]["sha"]})
+        if reason == "diario":
+            payload["daily_backup_date"] = now().date().isoformat()
+        changes.append({"path": latest, "mode": "100644", "type": "blob", "content": json.dumps(payload, ensure_ascii=False, indent=2)})
+        changes.extend({"path": path, "mode": "100644", "type": "blob", "sha": None}
+                       for path, item in entries.items()
+                       if path.startswith("backups/history/") and path.endswith("_ots_otd.json") and item["type"] == "blob")
+        new_tree = _request_json("POST", f"{api}/trees", token, {"base_tree": commit["tree"]["sha"], "tree": changes})
+        new_commit = _request_json("POST", f"{api}/commits", token, {
+            "message": f"Backup OTS/OTD ({reason}): manter atual e anterior",
+            "tree": new_tree["sha"], "parents": [head],
+        })
+        try:
+            _request_json("PATCH", f"{api}/refs/heads/{branch}", token, {"sha": new_commit["sha"], "force": False})
+            return
+        except HTTPError as exc:
+            if exc.code not in (409, 422) or attempt == 2:
+                raise
+
+
 def backup_to_github(reason: str = "manual") -> dict[str, Any]:
+    # ponytail: um processo por app; Git rejeita concorrencia externa sem force push.
+    with _BACKUP_LOCK:
+        return _backup_to_github(reason)
+
+
+def _backup_to_github(reason: str) -> dict[str, Any]:
     settings = github_settings()
     if _token_is_placeholder(settings["token"]):
         return {
@@ -317,15 +365,11 @@ def backup_to_github(reason: str = "manual") -> dict[str, Any]:
     if df.empty:
         return {"status": "IGNORADO_BASE_VAZIA", "message": "Backup GitHub ignorado: base local vazia.", "records": 0}
     payload = _backup_payload(df)
-    content = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
-    stamp = now().strftime("%Y%m%d_%H%M%S_%f")
-    history_path = f"backups/history/{stamp}_{uuid.uuid4().hex[:8]}_ots_otd.json"
     try:
-        _upload_bytes(settings, settings["latest_path"], content, f"Backup OTS/OTD latest ({reason})")
-        _upload_bytes(settings, history_path, content, f"Backup OTS/OTD historico ({reason})", retries=1)
+        _rotate_backup(settings, payload, reason)
     except HTTPError as exc:
         return {"status": "ERRO", "message": _github_http_error_message(exc), "records": int(len(df))}
-    except (URLError, TimeoutError) as exc:
+    except (URLError, TimeoutError, ValueError) as exc:
         return {"status": "ERRO", "message": str(exc), "records": int(len(df))}
     return {"status": "SUCESSO", "message": f"Backup enviado para {settings['latest_path']}.", "records": int(len(df))}
 
