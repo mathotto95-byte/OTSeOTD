@@ -146,7 +146,10 @@ def _request_json(method: str, url: str, token: str, payload: dict[str, Any] | N
         try:
             with urlopen(request, timeout=30) as response:
                 raw = response.read()
-            return json.loads(raw.decode("utf-8")) if raw else {}
+            text = raw.decode("utf-8").strip() if raw else ""
+            return json.loads(text) if text else {}
+        except json.JSONDecodeError as exc:
+            raise ValueError("GitHub retornou uma resposta vazia ou não-JSON ao gravar o backup.") from exc
         except HTTPError as exc:
             if exc.code == 401 and auth_scheme == "Bearer":
                 last_unauthorized = exc
