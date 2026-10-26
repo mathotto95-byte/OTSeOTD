@@ -400,7 +400,8 @@ def _render_include_box(current_username: str) -> None:
         with c3:
             codigo = st.text_input("Codigo de Monitoramento", key=f"ots_inc_codigo_{form_version}")
         justificativa = st.selectbox("Justificativa de seleção", ["", "SEM GRADE", "NÃO CHEGA"], key=f"ots_inc_justificativa_{form_version}")
-        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo, justificativa)
+        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo)
+        payload["justificativa_selecao"] = justificativa
         missing = validar_campos_obrigatorios(payload)
         if missing:
             st.caption("Campos pendentes: " + ", ".join(missing))
@@ -455,7 +456,8 @@ def _render_update_box(current_username: str) -> None:
             opcoes_justificativa = ["", "SEM GRADE", "NÃO CHEGA"]
             valor_justificativa = str(found.get("justificativa_selecao") or "")
             justificativa = st.selectbox("Justificativa de seleção", opcoes_justificativa, index=opcoes_justificativa.index(valor_justificativa) if valor_justificativa in opcoes_justificativa else 0, key=f"ots_upd_justificativa_{found.get('id')}")
-        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo, justificativa)
+        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo)
+        payload["justificativa_selecao"] = justificativa
         missing = validar_campos_obrigatorios(payload)
         changes = comparar_alteracoes(found, payload) if not missing else {}
         if missing:
