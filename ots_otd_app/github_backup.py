@@ -5,6 +5,7 @@ import json
 import os
 import time
 import threading
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -384,7 +385,8 @@ def restore_from_github_if_empty() -> dict[str, Any]:
         row = conn.execute("select count(*) as total from ots_otd_registros").fetchone()
         total = int(row["total"] if isinstance(row, dict) else row[0])
     try:
-        raw = _download_text(settings, settings["latest_path"])
+        local_backup = Path(__file__).resolve().parents[1] / "backups" / "ots_otd_latest.json"
+        raw = local_backup.read_text(encoding="utf-8") if local_backup.is_file() else _download_text(settings, settings["latest_path"])
         payload = json.loads(raw)
         rows = payload.get("rows") or []
         if not rows:
