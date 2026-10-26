@@ -132,7 +132,8 @@ def _build_request(method: str, url: str, token: str, payload: dict[str, Any] | 
     data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(url, data=data, method=method)
     request.add_header("Accept", "application/vnd.github+json")
-    request.add_header("Authorization", f"{auth_scheme} {token}")
+    if token:
+        request.add_header("Authorization", f"{auth_scheme} {token}")
     request.add_header("X-GitHub-Api-Version", "2022-11-28")
     if data is not None:
         request.add_header("Content-Type", "application/json")
@@ -378,22 +379,20 @@ def _backup_to_github(reason: str) -> dict[str, Any]:
 
 
 def restore_from_github_if_empty() -> dict[str, Any]:
-    if not github_backup_configured():
-        return {"status": "NAO_CONFIGURADO", "message": "GitHub backup nao configurado.", "records": 0}
     if get_database_config().db_type == "postgres":
         return {"status": "IGNORADO_SUPABASE", "message": "Banco principal em Supabase.", "records": 0}
     settings = github_settings()
     with get_connection() as conn:
         row = conn.execute("select count(*) as total from ots_otd_registros").fetchone()
         total = int(row["total"] if isinstance(row, dict) else row[0])
-        if total > 0:
-            return {"status": "IGNORADO_BASE_COM_DADOS", "message": "Base local ja possui dados.", "records": total}
     try:
         raw = _download_text(settings, settings["latest_path"])
         payload = json.loads(raw)
         rows = payload.get("rows") or []
         if not rows:
             return {"status": "IGNORADO_BACKUP_VAZIO", "message": "Backup GitHub sem registros.", "records": 0}
+        if total >= len(rows):
+            return {"status": "IGNORADO_BASE_ATUALIZADA", "message": "Base local ja possui todos os registros do backup.", "records": total}
         with get_connection() as conn:
             placeholders = ", ".join("?" for _ in BACKUP_COLUMNS)
             columns_sql = ", ".join(BACKUP_COLUMNS)

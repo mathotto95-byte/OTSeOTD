@@ -1,8 +1,10 @@
+import json
 import sqlite3
 import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 from ots_otd_app import auth, backup_restore, database, github_backup, repository
 from ots_otd_app.service import montar_payload, normalizar_codigo_monitoramento, normalizar_data, normalizar_data_hora, validar_campos_obrigatorios
@@ -79,11 +81,13 @@ class OtsOtdIndependentTest(unittest.TestCase):
             payload = montar_payload("01/08/2026", "02/08/2026", "Carga 08h", "", "TR2")
             repository.incluir_registro_original(payload, "ana")
             github_backup._read_secret = lambda name, default="": "token" if name == "GITHUB_TOKEN" else default
-            result = github_backup.restore_from_github_if_empty()
+            backup_rows = [{**payload, "id": 1}, {**payload, "id": 2, "codigo_monitoramento": "TR3"}]
+            with patch.object(github_backup, "_download_text", return_value=json.dumps({"rows": backup_rows})):
+                result = github_backup.restore_from_github_if_empty()
         finally:
             github_backup._read_secret = original_read_secret
 
-        self.assertEqual(result["status"], "IGNORADO_BASE_COM_DADOS")
+        self.assertEqual(result["status"], "RESTAURADO")
 
     def test_login_admin_padrao_quando_sem_secrets(self):
         original_read_users = auth._read_users_from_secrets
