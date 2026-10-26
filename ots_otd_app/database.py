@@ -153,8 +153,21 @@ def initialize_database(force: bool = False) -> None:
         with get_connection(initialize=False) as conn:
             if conn.db_type == "postgres":
                 _create_schema_postgres(conn)
+                conn.execute(
+                    """
+                    select setval(
+                        pg_get_serial_sequence('ots_otd_registros', 'id'),
+                        coalesce((select max(id) from ots_otd_registros), 0) + 1,
+                        false
+                    )
+                    """
+                )
             else:
                 _create_schema_sqlite(conn)
+            try:
+                conn.execute("alter table ots_otd_registros add column justificativa_selecao text not null default ''")
+            except Exception:
+                pass
             conn.execute("create index if not exists idx_ots_otd_codigo on ots_otd_registros(codigo_monitoramento)")
             conn.execute("create index if not exists idx_ots_otd_data on ots_otd_registros(data_hora_registro desc)")
             conn.execute("create index if not exists idx_ots_otd_status on ots_otd_registros(tipo_registro)")
