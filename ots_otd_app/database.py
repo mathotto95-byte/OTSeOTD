@@ -109,6 +109,7 @@ def _create_schema_sqlite(conn: DbConnection) -> None:
             agendamento_carga text not null,
             agenda_gfl text not null default '',
             codigo_monitoramento text not null,
+            justificativa_selecao text not null default '',
             tipo_registro text not null,
             data_hora_registro text not null,
             usuario_registro text not null,
@@ -131,6 +132,7 @@ def _create_schema_postgres(conn: DbConnection) -> None:
             agendamento_carga text not null,
             agenda_gfl text not null default '',
             codigo_monitoramento text not null,
+            justificativa_selecao text not null default '',
             tipo_registro text not null,
             data_hora_registro text not null,
             usuario_registro text not null,
@@ -164,6 +166,11 @@ def initialize_database(force: bool = False) -> None:
                 )
             else:
                 _create_schema_sqlite(conn)
+                conn.execute("delete from sqlite_sequence where name = 'ots_otd_registros'")
+                conn.execute(
+                    "insert into sqlite_sequence(name, seq) "
+                    "select 'ots_otd_registros', coalesce(max(id), 0) from ots_otd_registros"
+                )
             try:
                 conn.execute("alter table ots_otd_registros add column justificativa_selecao text not null default ''")
             except Exception:
