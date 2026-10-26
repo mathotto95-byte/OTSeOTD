@@ -379,8 +379,6 @@ def _backup_to_github(reason: str) -> dict[str, Any]:
 
 
 def restore_from_github_if_empty() -> dict[str, Any]:
-    if get_database_config().db_type == "postgres":
-        return {"status": "IGNORADO_SUPABASE", "message": "Banco principal em Supabase.", "records": 0}
     settings = github_settings()
     with get_connection() as conn:
         row = conn.execute("select count(*) as total from ots_otd_registros").fetchone()
@@ -396,8 +394,10 @@ def restore_from_github_if_empty() -> dict[str, Any]:
         with get_connection() as conn:
             placeholders = ", ".join("?" for _ in BACKUP_COLUMNS)
             columns_sql = ", ".join(BACKUP_COLUMNS)
+            insert = "insert" if conn.db_type == "postgres" else "insert or ignore"
+            conflict = " on conflict do nothing" if conn.db_type == "postgres" else ""
             conn.executemany(
-                f"insert or ignore into ots_otd_registros ({columns_sql}) values ({placeholders})",
+                f"{insert} into ots_otd_registros ({columns_sql}) values ({placeholders}){conflict}",
                 [tuple(row.get(column) for column in BACKUP_COLUMNS) for row in rows],
             )
     except HTTPError as exc:
