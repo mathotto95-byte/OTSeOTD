@@ -292,7 +292,7 @@ def _run_auto_github_backup(reason: str) -> None:
         return
     st.session_state["last_github_backup_result"] = {
         "status": "EM_SEGUNDO_PLANO",
-        "message": "Backup GitHub iniciado em segundo plano.",
+        "message": "Proteção GitHub iniciada em segundo plano.",
         "records": 0,
     }
     thread = threading.Thread(
@@ -304,23 +304,39 @@ def _run_auto_github_backup(reason: str) -> None:
     thread.start()
 
 
+@st.fragment(run_every="1h")
+def _run_hourly_github_backup() -> None:
+    """Mantém uma cópia do banco a cada hora enquanto o app estiver aberto."""
+    if not github_auto_backup_enabled():
+        return
+    bucket = now().strftime("%Y%m%d%H")
+    if st.session_state.get("hourly_github_backup_bucket") == bucket:
+        return
+    st.session_state["hourly_github_backup_bucket"] = bucket
+    _run_auto_github_backup("hora_em_hora")
+
+
 def _render_github_backup_panel() -> None:
     settings = github_settings()
     diagnostic = github_diagnostic()
     _refresh_button("sidebar_refresh_page", sidebar=True)
     st.sidebar.divider()
+<<<<<<< Updated upstream
     st.sidebar.subheader("Backup GitHub")
     st.sidebar.caption("Dois backups: atual e anterior. Diario as 01:00 (Brasilia), enquanto o app estiver ativo; atrasos sao executados ao retornar.")
+=======
+    st.sidebar.subheader("Proteção de dados")
+>>>>>>> Stashed changes
     st.sidebar.caption("Destino: arquivo JSON no GitHub, nao Release.")
     if github_backup_configured():
         st.sidebar.caption(f"Repo: {settings['repository']} | Branch: {settings['branch']}")
         st.sidebar.caption(f"Arquivo: {settings['latest_path']}")
     else:
-        st.sidebar.warning("GitHub backup nao configurado.")
+        st.sidebar.warning("Proteção GitHub nao configurada.")
         if diagnostic.get("token_placeholder"):
             st.sidebar.caption("O token parece incompleto. Cole o GITHUB_TOKEN completo, sem reticencias.")
         else:
-            st.sidebar.caption("Configure GITHUB_TOKEN nos Secrets para salvar backup no GitHub.")
+            st.sidebar.caption("Configure GITHUB_TOKEN nos Secrets para salvar os dados no GitHub.")
     st.sidebar.caption(f"Token: {diagnostic.get('token_masked')} | {diagnostic.get('token_length', 0)} caracteres")
 
     if st.sidebar.button("Testar conexao GitHub", use_container_width=True, key="github_connection_test"):
@@ -345,20 +361,20 @@ def _render_github_backup_panel() -> None:
         status = str(last_backup.get("status") or "")
         message = last_backup.get("message") or status
         if status == "SUCESSO":
-            st.sidebar.success(f"Backup GitHub OK: {last_backup.get('records', 0)} registro(s).")
+            st.sidebar.success(f"Proteção GitHub OK: {last_backup.get('records', 0)} registro(s).")
         elif status == "EM_SEGUNDO_PLANO":
-            st.sidebar.info("Backup GitHub iniciado em segundo plano.")
+            st.sidebar.info("Proteção GitHub iniciada em segundo plano.")
         elif status not in {"NAO_CONFIGURADO", ""}:
             st.sidebar.warning(message)
 
-    if st.sidebar.button("Enviar backup para GitHub", use_container_width=True, disabled=not github_backup_configured()):
+    if st.sidebar.button("Enviar dados para GitHub", use_container_width=True, disabled=not github_backup_configured()):
         st.session_state.pop("last_github_connection_test", None)
         result = backup_to_github("manual")
         st.session_state["last_github_backup_result"] = result
         if result.get("status") == "SUCESSO":
-            st.sidebar.success("Backup enviado para GitHub.")
+            st.sidebar.success("Dados enviados para GitHub.")
         else:
-            st.sidebar.warning(result.get("message") or "Backup GitHub nao concluido.")
+            st.sidebar.warning(result.get("message") or "Proteção GitHub nao concluida.")
 
 
 def _render_status() -> None:
@@ -473,7 +489,7 @@ def _render_import(current_username: str) -> None:
                 st.warning("Importacao parcial. Revise as linhas com erro.")
             else:
                 st.success("Importacao concluida.")
-            st.caption("Para nao deixar a importacao lenta, o backup GitHub desta carga deve ser feito pelo botao lateral.")
+            st.caption("Para nao deixar a importacao lenta, o envio desta carga deve ser feito pelo botao lateral.")
             cols = st.columns(5)
             cols[0].metric("Lidas", summary.get("lidas", 0))
             cols[1].metric("Incluidas", summary.get("incluidas", 0))
@@ -486,7 +502,7 @@ def _render_import(current_username: str) -> None:
 
 
 def _render_database_backup_tab(current_username: str) -> None:
-    st.subheader("Backup e recuperacao do banco")
+    st.subheader("Copia e recuperacao do banco")
     st.caption("Use esta aba para baixar uma copia completa e restaurar o banco caso o app abra sem dados.")
 
     df = all_database_records()
@@ -518,14 +534,14 @@ def _render_database_backup_tab(current_username: str) -> None:
         st.download_button(
             "Baixar banco ZIP",
             local_backup_zip(all_rows),
-            f"backup_ots_otd_{stamp}.zip",
+            f"ots_otd_banco_{stamp}.zip",
             "application/zip",
             use_container_width=True,
         )
 
     st.divider()
     st.subheader("Importar banco")
-    uploaded = st.file_uploader("Arquivo de backup do banco", type=["json", "xlsx", "xls"], key="database_backup_upload")
+    uploaded = st.file_uploader("Arquivo de dados do banco", type=["json", "xlsx", "xls"], key="database_backup_upload")
     mode_label = st.radio(
         "Modo de importacao",
         ["Mesclar com banco atual", "Substituir banco atual"],
@@ -535,7 +551,7 @@ def _render_database_backup_tab(current_username: str) -> None:
     mode = "replace" if mode_label.startswith("Substituir") else "merge"
     confirm = ""
     if mode == "replace":
-        st.warning("Substituir apaga o banco atual antes de importar. Backup vazio nao substitui dados existentes.")
+        st.warning("Substituir apaga o banco atual antes de importar. Arquivo vazio nao substitui dados existentes.")
         confirm = st.text_input("Digite RESTAURAR para liberar a substituicao", key="database_backup_replace_confirm")
     disabled = uploaded is None or (mode == "replace" and confirm.strip().upper() != "RESTAURAR")
     if st.button("Importar banco", type="primary", use_container_width=True, disabled=disabled):
@@ -544,7 +560,7 @@ def _render_database_backup_tab(current_username: str) -> None:
             rows = parse_backup_file(uploaded.name, content, uploaded)
             result = restore_backup_rows(rows, mode)
             if result.get("status") == "BLOQUEADO_BACKUP_VAZIO":
-                st.error("Backup vazio. Banco atual preservado.")
+                st.error("Arquivo vazio. Banco atual preservado.")
                 return
             if result.get("status") == "SUCESSO":
                 st.success(f"Banco importado com sucesso. {result.get('restored', 0)} registro(s) restaurado(s).")
@@ -553,7 +569,7 @@ def _render_database_backup_tab(current_username: str) -> None:
                     f"Importacao parcial. Restaurados: {result.get('restored', 0)} | "
                     f"Ignorados: {result.get('ignored', 0)}"
                 )
-            st.caption("Para nao deixar a importacao lenta, o backup GitHub desta carga deve ser feito pelo botao lateral.")
+            st.caption("Para nao deixar a importacao lenta, o envio desta carga deve ser feito pelo botao lateral.")
             st.rerun()
         except Exception as exc:
             st.error(f"Nao foi possivel importar o banco: {exc}")
@@ -638,8 +654,12 @@ def render_app() -> None:
     _apply_theme()
     initialize_database()
     _restore_from_github_once()
+<<<<<<< Updated upstream
     start_daily_backup()
     username = _require_login()
+=======
+    _run_hourly_github_backup()
+>>>>>>> Stashed changes
     _render_github_backup_panel()
     title_col, refresh_col = st.columns([5, 1])
     with title_col:
