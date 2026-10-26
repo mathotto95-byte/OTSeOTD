@@ -321,12 +321,8 @@ def _render_github_backup_panel() -> None:
     diagnostic = github_diagnostic()
     _refresh_button("sidebar_refresh_page", sidebar=True)
     st.sidebar.divider()
-<<<<<<< Updated upstream
     st.sidebar.subheader("Backup GitHub")
     st.sidebar.caption("Dois backups: atual e anterior. Diario as 01:00 (Brasilia), enquanto o app estiver ativo; atrasos sao executados ao retornar.")
-=======
-    st.sidebar.subheader("Proteção de dados")
->>>>>>> Stashed changes
     st.sidebar.caption("Destino: arquivo JSON no GitHub, nao Release.")
     if github_backup_configured():
         st.sidebar.caption(f"Repo: {settings['repository']} | Branch: {settings['branch']}")
@@ -403,7 +399,8 @@ def _render_include_box(current_username: str) -> None:
             agenda_gfl = st.text_input("Agenda GFL", key=f"ots_inc_agenda_gfl_{form_version}")
         with c3:
             codigo = st.text_input("Codigo de Monitoramento", key=f"ots_inc_codigo_{form_version}")
-        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo)
+        justificativa = st.selectbox("Justificativa de seleção", ["", "SEM GRADE", "NÃO CHEGA"], key=f"ots_inc_justificativa_{form_version}")
+        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo, justificativa)
         missing = validar_campos_obrigatorios(payload)
         if missing:
             st.caption("Campos pendentes: " + ", ".join(missing))
@@ -455,7 +452,10 @@ def _render_update_box(current_username: str) -> None:
         with c3:
             codigo = str(found.get("codigo_monitoramento") or "")
             st.text_input("Codigo de Monitoramento", value=codigo, disabled=True, key=f"ots_upd_codigo_{found.get('id')}")
-        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo)
+            opcoes_justificativa = ["", "SEM GRADE", "NÃO CHEGA"]
+            valor_justificativa = str(found.get("justificativa_selecao") or "")
+            justificativa = st.selectbox("Justificativa de seleção", opcoes_justificativa, index=opcoes_justificativa.index(valor_justificativa) if valor_justificativa in opcoes_justificativa else 0, key=f"ots_upd_justificativa_{found.get('id')}")
+        payload = montar_payload(previsao_carga, data_limite, agendamento_carga, agenda_gfl, codigo, justificativa)
         missing = validar_campos_obrigatorios(payload)
         changes = comparar_alteracoes(found, payload) if not missing else {}
         if missing:
@@ -654,12 +654,9 @@ def render_app() -> None:
     _apply_theme()
     initialize_database()
     _restore_from_github_once()
-<<<<<<< Updated upstream
     start_daily_backup()
     username = _require_login()
-=======
     _run_hourly_github_backup()
->>>>>>> Stashed changes
     _render_github_backup_panel()
     title_col, refresh_col = st.columns([5, 1])
     with title_col:
